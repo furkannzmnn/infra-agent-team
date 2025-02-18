@@ -52,6 +52,13 @@
             <artifactId>jackson-dataformat-yaml</artifactId>
             <version>2.15.0</version>
         </dependency>
+
+        <dependency>
+            <groupId>com.microsoft.terraform</groupId>
+            <artifactId>terraform-spring-boot-starter</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
     </dependencies>
 
     <build>

@@ -1,5 +1,6 @@
 package com.modulith.infraagentteam;
 
+import com.microsoft.terraform.TerraformClient;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -21,5 +22,10 @@ public class InfraAgentTeamApplication {
     @Bean
     public RestTemplate restTemplate() {
         return new RestTemplate();
+    }
+
+    @Bean
+    public TerraformClient terraformClient() {
+        return new TerraformClient();
     }
 }

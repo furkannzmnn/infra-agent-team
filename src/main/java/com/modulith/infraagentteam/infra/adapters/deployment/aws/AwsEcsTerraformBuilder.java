@@ -5,13 +5,18 @@ import com.modulith.infraagentteam.domain.deployment.model.Infrastructure;
 import com.modulith.infraagentteam.domain.deployment.model.Network;
 import com.modulith.infraagentteam.domain.deployment.model.Service;
 import com.modulith.infraagentteam.infra.adapters.deployment.DeploymentHandler;
+import com.modulith.infraagentteam.infra.adapters.deployment.terraform.TerraformExecutor;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
 
 @Component("aws-ecs-terraform")
+@RequiredArgsConstructor
 public class AwsEcsTerraformBuilder implements DeploymentHandler {
+
+    private final TerraformExecutor terraformExecutor;
 
     @Override
     public void handle(DeploymentConfig config) {
@@ -28,9 +33,12 @@ public class AwsEcsTerraformBuilder implements DeploymentHandler {
 
         Service mainService = services.values().iterator().next();
 
+
         return """
                 provider "aws" {
                   region = "%s"
+                  access_key = "%s"
+                  secret_key = "%s"
                 }
                 
                 resource "aws_security_group" "ecs_sg" {
@@ -59,14 +67,14 @@ public class AwsEcsTerraformBuilder implements DeploymentHandler {
                   family = "%s"
                   requires_compatibilities = ["FARGATE"]
                   network_mode = "awsvpc"
-                  memory = "%s"
-                  cpu = "%s"
+                  memory = %d
+                  cpu = %d
                   execution_role_arn = aws_iam_role.ecs_task_execution_role.arn
                   container_definitions = jsonencode([{
                     name = "%s"
                     image = "%s"
-                    memory = "%s"
-                    cpu = "%s"
+                    memory = %d
+                    cpu = %d
                     essential = true
                     portMappings = [{
                       containerPort = %d
@@ -90,18 +98,42 @@ public class AwsEcsTerraformBuilder implements DeploymentHandler {
                     assign_public_ip = true
                   }
                 }
+                
+                resource "aws_iam_role" "ecs_task_execution_role" {
+                  name = "ecsTaskExecutionRole"
+                
+                  assume_role_policy = jsonencode({
+                    Version = "2012-10-17"
+                    Statement = [{
+                      Effect = "Allow"
+                      Principal = {
+                        Service = "ecs-tasks.amazonaws.com"
+                      }
+                      Action = "sts:AssumeRole"
+                    }]
+                  })
+                }
+                
+                resource "aws_iam_policy_attachment" "ecs_task_execution_attach" {
+                  name       = "ecsTaskExecutionPolicyAttachment"
+                  roles      = [aws_iam_role.ecs_task_execution_role.name]
+                  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+                }
+                
                 """
                 .formatted(
                         infra.getRegion(),
+                        infra.getCredentials().getAccessKey(),
+                        infra.getCredentials().getSecretKey(),
                         network.getVpc(),
                         mainService.getPort(), mainService.getPort(),
                         mainService.getName(),
-                        mainService.getResources().getMemory(),
-                        mainService.getResources().getCpu(),
+                        Integer.parseInt(mainService.getResources().getMemory().replace("Mi", "")), // "2048Mi" → 2048
+                        Integer.parseInt(mainService.getResources().getCpu()),
                         mainService.getName(),
                         mainService.getImage(),
-                        mainService.getResources().getMemory(),
-                        mainService.getResources().getCpu(),
+                        Integer.parseInt(mainService.getResources().getMemory().replace("Mi", "")),
+                        Integer.parseInt(mainService.getResources().getCpu()),
                         mainService.getPort(),
                         mainService.getPort(),
                         mainService.getName(),
@@ -119,6 +151,6 @@ public class AwsEcsTerraformBuilder implements DeploymentHandler {
     }
 
     private void deployWithTerraform(String terraformScript) {
-
+        terraformExecutor.deploy(terraformScript);
     }
 }
