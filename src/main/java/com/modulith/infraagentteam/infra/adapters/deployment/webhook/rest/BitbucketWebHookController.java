@@ -1,4 +1,4 @@
-package com.modulith.infraagentteam.domain.webHook.api;
+package com.modulith.infraagentteam.infra.adapters.deployment.webhook.rest;
 
 import com.modulith.infraagentteam.domain.webHook.service.BitbucketPrMergeUseCaseHandler;
 import com.modulith.infraagentteam.domain.webHook.usecase.BitbucketPrMergeUseCase;
@@ -21,6 +21,8 @@ public class BitbucketWebHookController {
     private final BitbucketPrMergeUseCaseHandler bitbucketPrMergeUseCaseHandler;
 
     @PostMapping("/pr-merge")
+    // pr merge olduğu an buraya yansıyo,
+    // github web hook
     public ResponseEntity<String> handlePullRequestMerge(@RequestBody Map<String, Object> payload) {
         log.info("Received Bitbucket PR merge webhook: {}", payload);
         bitbucketPrMergeUseCaseHandler.handle(BitbucketPrMergeUseCase.toDomain(payload));

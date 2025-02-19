@@ -2,7 +2,7 @@ package com.modulith.infraagentteam.infra.deployment.adapter;
 
 import com.modulith.infraagentteam.domain.deployment.model.*;
 import com.modulith.infraagentteam.domain.deployment.port.DeploymentPort;
-import com.modulith.infraagentteam.domain.shared.model.query.BitbucketFileRetrieveRequest;
+import com.modulith.infraagentteam.domain.shared.model.query.FileRetrieveRequest;
 
 import java.util.List;
 import java.util.Map;
@@ -10,7 +10,7 @@ import java.util.Map;
 class FakeDeploymentAdapter implements DeploymentPort {
 
     @Override
-    public DeploymentConfig retrieve(BitbucketFileRetrieveRequest request) {
+    public DeploymentConfig retrieve(FileRetrieveRequest request) {
         return DeploymentConfig.builder()
                 .infrastructure(Infrastructure.builder()
                         .provider("aws")
