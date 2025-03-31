@@ -5,6 +5,7 @@ import com.modulith.infraagentteam.domain.deployment.port.DeploymentPort;
 import com.modulith.infraagentteam.domain.shared.model.query.FileRetrieveRequest;
 import com.modulith.infraagentteam.domain.shared.model.query.GitType;
 import com.modulith.infraagentteam.domain.webHook.usecase.BitbucketPrMergeUseCase;
+import com.modulith.infraagentteam.infra.adapters.persistence.redis.RedisCommitHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -15,10 +16,15 @@ import org.springframework.stereotype.Service;
 public class BitbucketPrMergeUseCaseHandler {
 
     private final DeploymentPort deploymentYamlPort;
+    private final RedisCommitHandler redisCommitHandler;
 
     public void handle(BitbucketPrMergeUseCase payload) {
-
         log.info("Handling Bitbucket PR merge webhook: {}", payload);
+
+        if (redisCommitHandler.isCommitProcessed(payload.commitId())) {
+            log.info("Commit already processed: {}", payload.commitId());
+            return;
+        }
 
         DeploymentConfig config = deploymentYamlPort.retrieve(FileRetrieveRequest.builder()
                 .commit(payload.commitId())
@@ -30,5 +36,7 @@ public class BitbucketPrMergeUseCaseHandler {
         log.info("Deployment config retrieved: {}", config);
 
         deploymentYamlPort.start(config);
+
+        redisCommitHandler.markCommitAsProcessed(payload.commitId());
     }
 }

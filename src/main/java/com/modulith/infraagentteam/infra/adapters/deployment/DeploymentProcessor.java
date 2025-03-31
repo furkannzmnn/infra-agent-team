@@ -13,7 +13,6 @@ public class DeploymentProcessor {
     private final Map<String, DeploymentHandler> handlers;
 
     public void processDeployment(DeploymentConfig config) {
-
         String key = config.getType() + "-" + config.getInfrastructure().getDeploymentTool();
         DeploymentHandler handler = handlers.get(key);
 

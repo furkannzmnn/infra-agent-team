@@ -6,7 +6,7 @@ Resources:
   ECSExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: ecsTaskExecutionRole
+      RoleName: !Sub "${AWS::StackName}-ecs-task-execution-role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -18,35 +18,24 @@ Resources:
               - sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
-      Policies:
-        - PolicyName: SecretsManagerAccess
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - secretsmanager:GetSecretValue
-                Resource: "{{SECRETS_ARN}}"
 
   ### 📌 ECS Cluster
   ECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: "{{CLUSTER_NAME}}"
+      ClusterName: !Sub "${AWS::StackName}-cluster"
 
   ### 📌 ALB (Load Balancer)
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: "app-alb"
+      Name: !Sub "${AWS::StackName}-alb"
       Scheme: internet-facing
       Type: application
       IpAddressType: ipv4
       SecurityGroups:
         - "{{SECURITY_GROUP}}"
-      Subnets:
-        - "{{SUBNET_1}}"
-        - "{{SUBNET_2}}"
+      Subnets: {{SUBNETS}}
 
   ### 📌 ALB Listener (HTTP)
   ALBListener:
@@ -63,7 +52,7 @@ Resources:
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: "app-target-group"
+      Name: !Sub "${AWS::StackName}-target-group"
       VpcId: "{{VPC_ID}}"
       Port: "{{PORT}}"
       Protocol: HTTP
@@ -78,7 +67,7 @@ Resources:
   ECSTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: "app-task"
+      Family: !Sub "${AWS::StackName}-task"
       Cpu: "{{CPU}}"
       Memory: "{{MEMORY}}"
       RequiresCompatibilities:
@@ -93,20 +82,14 @@ Resources:
           Essential: true
           PortMappings:
             - ContainerPort: "{{PORT}}"
-          Environment:
-            {{#each ENV_VARS}}
-            - Name: "{{key}}"
-              Value: "{{value}}"
-            {{/each}}
-          Secrets:
-            - Name: AWS_ACCESS_KEY_ID
-              ValueFrom: "{{SECRETS_ARN}}:AWS_ACCESS_KEY_ID::"
-            - Name: AWS_SECRET_ACCESS_KEY
-              ValueFrom: "{{SECRETS_ARN}}:AWS_SECRET_ACCESS_KEY::"
+          Environment: {{ENV_VARS}}
 
   ### 📌 ECS Service (Load Balancer ile)
   ECSService:
     Type: AWS::ECS::Service
+    DependsOn:
+      - ApplicationLoadBalancer
+      - ALBTargetGroup
     Properties:
       Cluster: !Ref ECSCluster
       DesiredCount: "{{REPLICAS}}"
@@ -118,12 +101,10 @@ Resources:
           TargetGroupArn: !Ref ALBTargetGroup
       NetworkConfiguration:
         AwsvpcConfiguration:
-          AssignPublicIp: ENABLED
-          SecurityGroups:
+          Subnets: {{SUBNETS}}
+          SecurityGroups: 
             - "{{SECURITY_GROUP}}"
-          Subnets:
-            - "{{SUBNET_1}}"
-            - "{{SUBNET_2}}"
+          AssignPublicIp: ENABLED
 
 Outputs:
   ALBPublicDNS:
