@@ -6,8 +6,8 @@ infrastructure:
   deploymentTool: cloudformation
   region: us-east-1
   credentials:
-    accessKey: "AKIAWRTAASJMM23J5US7"
-    secretKey: "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"
+    accessKey: "x"
+    secretKey: "x"
 
 services:
   backend:
