@@ -1,4 +1,4 @@
-package com.modulith.infraagentteam.infra.adapters.deployment.terraform;
+package com.modulith.infraagentteam.infra.adapters.deployment.cloud.terraform;
 
 import com.microsoft.terraform.TerraformClient;
 import lombok.RequiredArgsConstructor;

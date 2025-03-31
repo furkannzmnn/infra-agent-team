@@ -1,4 +1,4 @@
-package com.modulith.infraagentteam.infra.adapters.deployment.aws.cloudformation;
+package com.modulith.infraagentteam.infra.adapters.deployment.cloud.aws.cloudformation;
 
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;

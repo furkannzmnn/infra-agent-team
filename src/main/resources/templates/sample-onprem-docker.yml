@@ -1,0 +1,61 @@
+type: onprem
+infrastructure:
+  provider: on-prem
+  deploymentTool: docker-compose
+  region: local
+
+services:
+  backend:
+    name: "backend-service"
+    image: "nginx"
+    port: 8080
+    envVars:
+      - key: "DATABASE_URL"
+        value: "jdbc:postgresql://db:5432/mydatabase"
+      - key: "SPRING_PROFILES_ACTIVE"
+        value: "prod"
+      - key: "REDIS_HOST"
+        value: "${{services.redis.host}}"
+    replicas: 3
+    resources:
+      cpu: "1"
+      memory: "2048Mi"
+
+  frontend:
+    name: "frontend-service"
+    image: "myrepo/frontend:latest"
+    port: 3000
+    replicas: 2
+    resources:
+      cpu: "0.5"
+      memory: "1024Mi"
+
+  redis:
+    name: "redis-service"
+    image: "redis:latest"
+    port: 6379
+    resources:
+      cpu: "0.5"
+      memory: "512Mi"
+
+  mysql:
+    name: "mysql-service"
+    image: "mysql:8.0"
+    port: 3306
+    envVars:
+      - key: "MYSQL_ROOT_PASSWORD"
+        value: "secret"
+      - key: "MYSQL_DATABASE"
+        value: "mydatabase"
+    resources:
+      cpu: "1"
+      memory: "1024Mi"
+
+network:
+  vpc: "local"
+  subnets: ["local"]
+  securityGroup: "local"
+
+monitoring:
+  enabled: true
+  tool: "prometheus" 

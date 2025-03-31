@@ -1,11 +1,11 @@
-package com.modulith.infraagentteam.infra.adapters.deployment.aws.ecs;
+package com.modulith.infraagentteam.infra.adapters.deployment.cloud.aws.ecs;
 
 import com.modulith.infraagentteam.domain.deployment.model.DeploymentConfig;
 import com.modulith.infraagentteam.domain.deployment.model.Infrastructure;
 import com.modulith.infraagentteam.domain.deployment.model.Network;
 import com.modulith.infraagentteam.domain.deployment.model.Service;
 import com.modulith.infraagentteam.infra.adapters.deployment.DeploymentHandler;
-import com.modulith.infraagentteam.infra.adapters.deployment.terraform.TerraformExecutor;
+import com.modulith.infraagentteam.infra.adapters.deployment.cloud.terraform.TerraformExecutor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
