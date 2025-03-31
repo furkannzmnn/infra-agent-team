@@ -1,15 +1,11 @@
 package com.modulith.infraagentteam.infra.adapters.deployment.cloud.aws.cloudformation;
 
+import com.modulith.infraagentteam.domain.deployment.model.*;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.cloudformation.CloudFormationClient;
 import software.amazon.awssdk.services.cloudformation.model.*;
-import com.modulith.infraagentteam.domain.deployment.model.DeploymentConfig;
-import com.modulith.infraagentteam.domain.deployment.model.Infrastructure;
-import com.modulith.infraagentteam.domain.deployment.model.Network;
-import com.modulith.infraagentteam.domain.deployment.model.Service;
-import com.modulith.infraagentteam.domain.deployment.model.EnvironmentVariable;
 import com.modulith.infraagentteam.infra.adapters.deployment.DeploymentHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -19,6 +15,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Map;
 import java.util.UUID;
 import java.util.List;
@@ -32,69 +29,189 @@ public class AwsEcsCloudformationBuilder implements DeploymentHandler {
 
     @Override
     public void handle(DeploymentConfig config) {
-        System.out.println("Generating Cloudformation script for AWS ECS deployment...");
+        System.out.println("Generating AWS ECS CloudFormation template...");
 
         String cloudformationScript = generateCloudformationScript(config);
+        System.out.println("Generated CloudFormation script:\n" + cloudformationScript);
         deployWithCloudformation(cloudformationScript, config.getInfrastructure(), config.getType());
     }
 
     private String generateCloudformationScript(DeploymentConfig config) {
-        Map<String, Service> services = config.getServices();
-        Network network = config.getNetwork();
-
-        Service mainService = services.values().iterator().next();
-
         try {
-            ClassPathResource resource = new ClassPathResource("templates/ecs-cloudformation.yml");
-            String template = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
+            String template = new String(Files.readAllBytes(new ClassPathResource("templates/ecs-cloudformation.yml").getFile().toPath()));
+            Map<String, Service> services = config.getServices();
+            Network network = config.getNetwork();
 
-            String envVarsJson = generateEnvVarsJson(mainService.getEnvVars());
-            String subnetsJson = generateSubnetsJson(network.getSubnets());
+            template = template.replace("{{VPC}}", network.getVpc());
+            template = template.replace("{{SUBNETS}}", generateSubnetsJson(network.getSubnets()));
+            template = template.replace("{{SECURITY_GROUP}}", network.getSecurityGroup());
 
-            return template
-                    .replace("{{VPC_ID}}", network.getVpc().trim())
-                    .replace("{{CPU}}", mainService.getResources().getCpu())
-                    .replace("{{MEMORY}}", mainService.getResources().getMemory().replace("Mi", ""))
-                    .replace("{{IMAGE}}", mainService.getImage())
-                    .replace("{{PORT}}", String.valueOf(mainService.getPort()))
-                    .replace("{{REPLICAS}}", String.valueOf(mainService.getReplicas()))
-                    .replace("{{ENV_VARS}}", envVarsJson)
-                    .replace("{{SUBNETS}}", subnetsJson)
-                    .replace("{{SECURITY_GROUP}}", network.getSecurityGroup().trim());
+            StringBuilder taskDefinitions = new StringBuilder();
+            StringBuilder servicesBuilder = new StringBuilder();
+            StringBuilder targetGroups = new StringBuilder();
+            StringBuilder listeners = new StringBuilder();
+
+            int listenerPort = 80;
+            for (Map.Entry<String, Service> entry : services.entrySet()) {
+                String serviceName = entry.getKey();
+                Service service = entry.getValue();
+
+                taskDefinitions.append(generateTaskDefinition(serviceName, service, services));
+
+                if (!service.isInternal()) {
+                    targetGroups.append(generateTargetGroup(serviceName, service));
+                    listeners.append(generateListenerRule(serviceName, service, listenerPort++));
+                }
+
+                servicesBuilder.append(generateEcsService(serviceName, service, network));
+            }
+
+            template = template.replace("{{TASK_DEFINITIONS}}", taskDefinitions.toString());
+            template = template.replace("{{TARGET_GROUPS}}", targetGroups.toString());
+            template = template.replace("{{LISTENER_RULES}}", listeners.toString());
+            template = template.replace("{{ECS_SERVICES}}", servicesBuilder.toString());
+
+            template = template.replace("{{VPC}}", network.getVpc());
+
+            return template;
         } catch (IOException e) {
             throw new RuntimeException("Error reading CloudFormation template", e);
         }
     }
 
-    private String generateSubnetsJson(List<String> subnets) {
-        try {
-            List<String> cleanedSubnets = subnets.stream()
-                    .map(String::trim)
-                    .toList();
-            return objectMapper.writeValueAsString(cleanedSubnets);
-        } catch (IOException e) {
-            throw new RuntimeException("Error generating subnets JSON", e);
+    private String generateTaskDefinition(String serviceName, Service service, Map<String, Service> services) {
+        StringBuilder taskDef = new StringBuilder();
+        taskDef.append("  ").append(serviceName).append("TaskDefinition:\n");
+        taskDef.append("    Type: AWS::ECS::TaskDefinition\n");
+        taskDef.append("    Properties:\n");
+        taskDef.append("      Family: ").append(serviceName).append("\n");
+        taskDef.append("      Cpu: ").append(service.getResources().getCpu()).append("\n");
+        taskDef.append("      Memory: ").append(service.getResources().getMemory()).append("\n");
+        taskDef.append("      NetworkMode: awsvpc\n");
+        taskDef.append("      RequiresCompatibilities:\n");
+        taskDef.append("        - FARGATE\n");
+        taskDef.append("      ExecutionRoleArn: !GetAtt EcsTaskExecutionRole.Arn\n");
+        taskDef.append("      TaskRoleArn: !GetAtt EcsTaskRole.Arn\n");
+        taskDef.append("      ContainerDefinitions:\n");
+        taskDef.append("        - Name: ").append(serviceName).append("\n");
+        taskDef.append("          Image: ").append(service.getImage()).append("\n");
+        taskDef.append("          PortMappings:\n");
+        taskDef.append("            - ContainerPort: ").append(service.getPort()).append("\n");
+        taskDef.append("              Protocol: tcp\n");
+
+        if (service.getEnvVars() != null && !service.getEnvVars().isEmpty()) {
+            taskDef.append("          Environment:\n");
+            for (EnvironmentVariable envVar : service.getEnvVars()) {
+                taskDef.append("            - Name: ").append(envVar.getKey()).append("\n");
+                taskDef.append("              Value: ").append(resolveEnvVarValue(envVar.getValue(), services)).append("\n");
+            }
         }
+
+        taskDef.append("\n");
+        return taskDef.toString();
     }
 
-    private String generateEnvVarsJson(List<EnvironmentVariable> envVars) {
-        if (envVars == null || envVars.isEmpty()) {
-            return "[]";
-        }
+    private String generateTargetGroup(String serviceName, Service service) {
+        StringBuilder targetGroup = new StringBuilder();
+        targetGroup.append("  ").append(serviceName).append("TargetGroup:\n");
+        targetGroup.append("    Type: AWS::ElasticLoadBalancingV2::TargetGroup\n");
+        targetGroup.append("    Properties:\n");
+        targetGroup.append("      Name: ").append(serviceName).append("-tg\n");
+        targetGroup.append("      Port: ").append(service.getPort()).append("\n");
+        targetGroup.append("      Protocol: HTTP\n");
+        targetGroup.append("      TargetType: ip\n");
+        targetGroup.append("      VpcId: ").append("{{VPC}}").append("\n");
+        targetGroup.append("      HealthCheckPath: /\n");
+        targetGroup.append("      HealthCheckIntervalSeconds: 30\n");
+        targetGroup.append("      HealthCheckTimeoutSeconds: 5\n");
+        targetGroup.append("      HealthyThresholdCount: 2\n");
+        targetGroup.append("      UnhealthyThresholdCount: 2\n");
+        targetGroup.append("\n");
+        return targetGroup.toString();
+    }
 
-        List<Map<String, String>> envVarList = new ArrayList<>();
-        for (EnvironmentVariable envVar : envVars) {
-            envVarList.add(Map.of(
-                "Name", envVar.getKey(),
-                "Value", envVar.getValue()
-            ));
-        }
+    private String generateListenerRule(String serviceName, Service service, int port) {
+        StringBuilder listener = new StringBuilder();
+        listener.append("  ").append(serviceName).append("ListenerRule:\n");
+        listener.append("    Type: AWS::ElasticLoadBalancingV2::ListenerRule\n");
+        listener.append("    DependsOn:\n");
+        listener.append("      - ApplicationLoadBalancerListener\n");
+        listener.append("      - ").append(serviceName).append("TargetGroup\n");
+        listener.append("    Properties:\n");
+        listener.append("      ListenerArn: !Ref ApplicationLoadBalancerListener\n");
+        listener.append("      Priority: ").append(port).append("\n");
+        listener.append("      Conditions:\n");
+        listener.append("        - Field: path-pattern\n");
+        listener.append("          Values:\n");
+        listener.append("            - /").append(serviceName).append("/*\n");
+        listener.append("      Actions:\n");
+        listener.append("        - Type: forward\n");
+        listener.append("          TargetGroupArn: !Ref ").append(serviceName).append("TargetGroup\n");
+        listener.append("\n");
+        return listener.toString();
+    }
 
-        try {
-            return objectMapper.writeValueAsString(envVarList);
-        } catch (IOException e) {
-            throw new RuntimeException("Error generating environment variables JSON", e);
+    private String generateEcsService(String serviceName, Service service, Network network) {
+        StringBuilder ecsService = new StringBuilder();
+        ecsService.append("  ").append(serviceName).append("Service:\n");
+        ecsService.append("    Type: AWS::ECS::Service\n");
+        ecsService.append("    DependsOn:\n");
+        ecsService.append("      - ApplicationLoadBalancer\n");
+        if (!service.isInternal()) {
+            ecsService.append("      - ").append(serviceName).append("TargetGroup\n");
+            ecsService.append("      - ").append(serviceName).append("ListenerRule\n");
         }
+        ecsService.append("    Properties:\n");
+        ecsService.append("      ServiceName: ").append(serviceName).append("\n");
+        ecsService.append("      Cluster: !Ref EcsCluster\n");
+        ecsService.append("      TaskDefinition: !Ref ").append(serviceName).append("TaskDefinition\n");
+        ecsService.append("      DesiredCount: ").append(service.getReplicas() != null ? service.getReplicas() : 1).append("\n");
+        ecsService.append("      LaunchType: FARGATE\n");
+        ecsService.append("      NetworkConfiguration:\n");
+        ecsService.append("        AwsvpcConfiguration:\n");
+        ecsService.append("          Subnets: ").append(generateSubnetsJson(network.getSubnets())).append("\n");
+        ecsService.append("          SecurityGroups:\n");
+        ecsService.append("            - ").append(network.getSecurityGroup()).append("\n");
+        ecsService.append("          AssignPublicIp: ").append(service.isInternal() ? "DISABLED" : "ENABLED").append("\n");
+        if (!service.isInternal()) {
+            ecsService.append("      LoadBalancers:\n");
+            ecsService.append("        - TargetGroupArn: !Ref ").append(serviceName).append("TargetGroup\n");
+            ecsService.append("          ContainerName: ").append(serviceName).append("\n");
+            ecsService.append("          ContainerPort: ").append(service.getPort()).append("\n");
+        }
+        ecsService.append("\n");
+        return ecsService.toString();
+    }
+
+    private String resolveEnvVarValue(String value, Map<String, Service> services) {
+        if (value != null && value.startsWith("${{services.")) {
+            String[] parts = value.substring(2, value.length() - 2).split("\\.");
+            if (parts.length == 3) {
+                String serviceName = parts[1];
+                String property = parts[2];
+                Service referencedService = services.get(serviceName);
+                if (referencedService != null) {
+                    if ("host".equals(property)) {
+                        return referencedService.getName() + ".internal";
+                    }
+                }
+            }
+        }
+        return value;
+    }
+
+    private String generateSubnetsJson(List<String> subnets) {
+        StringBuilder json = new StringBuilder();
+        json.append("[\n");
+        for (int i = 0; i < subnets.size(); i++) {
+            json.append("      \"").append(subnets.get(i).trim()).append("\"");
+            if (i < subnets.size() - 1) {
+                json.append(",");
+            }
+            json.append("\n");
+        }
+        json.append("    ]");
+        return json.toString();
     }
 
     private void deployWithCloudformation(String cloudformationScript, Infrastructure infrastructure, String type) {
@@ -111,9 +228,7 @@ public class AwsEcsCloudformationBuilder implements DeploymentHandler {
         String stackName = type + "-" + UUID.randomUUID().toString().substring(0, 8);
 
         try {
-
             if (hasAlreadyCreatedStack(type, cloudFormationClient)) return;
-
         } catch (Exception e) {
             System.out.println("Error checking existing stacks: " + e.getMessage());
         }
@@ -129,7 +244,6 @@ public class AwsEcsCloudformationBuilder implements DeploymentHandler {
             CreateStackResponse createStackResponse = cloudFormationClient.createStack(createStackRequest);
             System.out.println("Stack creation initiated with ID: " + createStackResponse.stackId());
 
-            // Wait for stack creation to complete
             waitForStackCreation(cloudFormationClient, stackName);
         } catch (Exception e) {
             throw new RuntimeException("Error deploying CloudFormation stack", e);
@@ -171,7 +285,7 @@ public class AwsEcsCloudformationBuilder implements DeploymentHandler {
                     throw new RuntimeException("Stack creation failed");
                 }
 
-                Thread.sleep(5000); // Wait 5 seconds before checking again
+                Thread.sleep(5000);
             } catch (Exception e) {
                 throw new RuntimeException("Error checking stack status", e);
             }

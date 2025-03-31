@@ -31,7 +31,7 @@ services:
     replicas: 2
     resources:
       cpu: "512"
-      memory: "1024Mi"
+      memory: "2048Mi"
 
   redis:
     image: "redis:latest"

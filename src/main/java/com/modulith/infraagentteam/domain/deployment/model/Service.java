@@ -14,10 +14,11 @@ import java.util.List;
 public class Service {
     private String name;
     private String image;
-    private int port;
-    private List<EnvironmentVariable> envVars;
-    private int replicas;
+    private Integer port;
+    private Integer replicas;
     private Resources resources;
+    private List<EnvironmentVariable> envVars;
+    private boolean internal = true;
 
     public Resources getResources() {
         if (resources == null) {

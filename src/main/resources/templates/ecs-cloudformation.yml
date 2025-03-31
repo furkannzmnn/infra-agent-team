@@ -1,112 +1,76 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: "Application running on AWS ECS Fargate with ALB"
+Description: 'AWS ECS Fargate with Application Load Balancer'
 
 Resources:
-  ### 📌 ECS Task Execution Role
-  ECSExecutionRole:
+  EcsTaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${AWS::StackName}-ecs-task-execution-role"
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
-              Service:
-                - ecs-tasks.amazonaws.com
-            Action:
-              - sts:AssumeRole
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
 
-  ### 📌 ECS Cluster
-  ECSCluster:
+  EcsTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+
+  EcsCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub "${AWS::StackName}-cluster"
+      ClusterName: !Sub ${AWS::StackName}-cluster
 
-  ### 📌 ALB (Load Balancer)
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub "${AWS::StackName}-alb"
+      Name: !Sub ${AWS::StackName}-alb
       Scheme: internet-facing
-      Type: application
-      IpAddressType: ipv4
-      SecurityGroups:
-        - "{{SECURITY_GROUP}}"
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '60'
       Subnets: {{SUBNETS}}
+      SecurityGroups:
+        - {{SECURITY_GROUP}}
 
-  ### 📌 ALB Listener (HTTP)
-  ALBListener:
+  ApplicationLoadBalancerListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    DependsOn: ApplicationLoadBalancer
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Protocol: HTTP
       Port: 80
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref ALBTargetGroup
-
-  ### 📌 ALB Target Group
-  ALBTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      Name: !Sub "${AWS::StackName}-target-group"
-      VpcId: "{{VPC_ID}}"
-      Port: "{{PORT}}"
       Protocol: HTTP
-      TargetType: ip
-      HealthCheckPath: "/health"
-      HealthCheckIntervalSeconds: 30
-      HealthCheckTimeoutSeconds: 5
-      HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 3
+      DefaultActions:
+        - Type: fixed-response
+          FixedResponseConfig:
+            StatusCode: '404'
+            ContentType: text/plain
+            MessageBody: 'Not Found'
 
-  ### 📌 ECS Task Definition
-  ECSTaskDefinition:
-    Type: AWS::ECS::TaskDefinition
-    Properties:
-      Family: !Sub "${AWS::StackName}-task"
-      Cpu: "{{CPU}}"
-      Memory: "{{MEMORY}}"
-      RequiresCompatibilities:
-        - FARGATE
-      NetworkMode: awsvpc
-      ExecutionRoleArn: !Ref ECSExecutionRole
-      ContainerDefinitions:
-        - Name: "app"
-          Image: "{{IMAGE}}"
-          Memory: "{{MEMORY}}"
-          Cpu: "{{CPU}}"
-          Essential: true
-          PortMappings:
-            - ContainerPort: "{{PORT}}"
-          Environment: {{ENV_VARS}}
-
-  ### 📌 ECS Service (Load Balancer ile)
-  ECSService:
-    Type: AWS::ECS::Service
-    DependsOn:
-      - ApplicationLoadBalancer
-      - ALBTargetGroup
-    Properties:
-      Cluster: !Ref ECSCluster
-      DesiredCount: "{{REPLICAS}}"
-      LaunchType: FARGATE
-      TaskDefinition: !Ref ECSTaskDefinition
-      LoadBalancers:
-        - ContainerName: "app"
-          ContainerPort: "{{PORT}}"
-          TargetGroupArn: !Ref ALBTargetGroup
-      NetworkConfiguration:
-        AwsvpcConfiguration:
-          Subnets: {{SUBNETS}}
-          SecurityGroups: 
-            - "{{SECURITY_GROUP}}"
-          AssignPublicIp: ENABLED
+{{TASK_DEFINITIONS}}
+{{TARGET_GROUPS}}
+{{LISTENER_RULES}}
+{{ECS_SERVICES}}
 
 Outputs:
-  ALBPublicDNS:
-    Description: "Public DNS of the Application Load Balancer"
+  ClusterName:
+    Description: The name of the ECS cluster
+    Value: !Ref EcsCluster
+    Export:
+      Name: !Sub ${AWS::StackName}-ClusterName
+
+  LoadBalancerDNS:
+    Description: The DNS name of the load balancer
     Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub ${AWS::StackName}-LoadBalancerDNS

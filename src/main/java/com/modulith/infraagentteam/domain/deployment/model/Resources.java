@@ -20,6 +20,7 @@ public class Resources {
     }
 
     public String getMemory() {
-        return Objects.requireNonNullElse(memory, "2048");
+        String value = Objects.requireNonNullElse(memory, "2048");
+        return value.replace("Mi", "").replace("Gi", "");
     }
 }
