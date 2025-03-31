@@ -1,0 +1,50 @@
+type: aws-ecs
+
+
+infrastructure:
+  provider: aws
+  deploymentTool: cloudformation
+  region: us-east-1
+  credentials:
+    accessKey: "AKIAWRTAASJMM23J5US7"
+    secretKey: "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"
+
+services:
+  backend:
+    name: "backend-service"
+    image: "nginx"
+    port: 8080
+    envVars:
+      - key: "DATABASE_URL"
+        value: "jdbc:postgresql://db:5432/mydatabase"
+      - key: "SPRING_PROFILES_ACTIVE"
+        value: "prod"
+    replicas: 3
+    resources:
+      cpu: "1024"
+      memory: "2048Mi"
+
+  frontend:
+    name: "frontend-service"
+    image: "myrepo/frontend:latest"
+    port: 3000
+    replicas: 2
+    resources:
+      cpu: "512"
+      memory: "1024Mi"
+
+  redis:
+    image: "redis:latest"
+    port: 6379
+
+network:
+  vpc: "vpc-06748ebe7604815c4"
+  subnets:
+    - "subnet-098c8576464c28781"
+    - "subnet-047b846729f9b5c60"
+  securityGroup: "sg-06cfe052759e516ac"
+
+
+monitoring:
+  enabled: true
+  tool: "prometheus"

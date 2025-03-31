@@ -1,4 +1,4 @@
-package com.modulith.infraagentteam.infra.adapters.deployment.aws;
+package com.modulith.infraagentteam.infra.adapters.deployment.aws.ecs;
 
 import com.modulith.infraagentteam.domain.deployment.model.DeploymentConfig;
 import com.modulith.infraagentteam.domain.deployment.model.Infrastructure;

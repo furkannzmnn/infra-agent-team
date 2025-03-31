@@ -22,6 +22,5 @@ public class DeploymentProcessor {
         } else {
             throw new UnsupportedOperationException("Unsupported deployment type: " + key);
         }
-
     }
 }
