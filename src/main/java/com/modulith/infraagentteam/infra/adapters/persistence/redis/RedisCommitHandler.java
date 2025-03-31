@@ -14,16 +14,21 @@ public class RedisCommitHandler {
     private static final String COMMIT_KEY_PREFIX = "commit:";
     private static final long COMMIT_EXPIRY_DAYS = 7;
 
-    public boolean isCommitProcessed(String commitId) {
-        return Boolean.TRUE.equals(redisTemplate.hasKey(COMMIT_KEY_PREFIX + commitId));
+    public void markCommitAsProcessed(String commitId) {
+
+        if (isCommitProcessed(commitId)) {
+            throw new RuntimeException("Commit already processed: " + commitId);
+        }
+
+        redisTemplate.opsForValue().set(
+                COMMIT_KEY_PREFIX + commitId,
+                "processed",
+                COMMIT_EXPIRY_DAYS,
+                TimeUnit.DAYS
+        );
     }
 
-    public void markCommitAsProcessed(String commitId) {
-        redisTemplate.opsForValue().set(
-            COMMIT_KEY_PREFIX + commitId,
-            "processed",
-            COMMIT_EXPIRY_DAYS,
-            TimeUnit.DAYS
-        );
+    public boolean isCommitProcessed(String commitId) {
+        return redisTemplate.hasKey(COMMIT_KEY_PREFIX + commitId);
     }
 } 

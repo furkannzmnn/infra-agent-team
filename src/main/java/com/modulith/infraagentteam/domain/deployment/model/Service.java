@@ -18,4 +18,14 @@ public class Service {
     private List<EnvironmentVariable> envVars;
     private int replicas;
     private Resources resources;
+
+    public Resources getResources() {
+        if (resources == null) {
+            return Resources.builder()
+                    .cpu("1024")
+                    .memory("2048")
+                    .build();
+        }
+        return resources;
+    }
 }

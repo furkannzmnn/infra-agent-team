@@ -16,6 +16,11 @@ public record BitbucketPrMergeUseCase(String commitId, String repositoryName, St
             Map<String, Object> destination = (Map<String, Object>) pullRequest.get("destination");
             Map<String, Object> mergeCommit = (Map<String, Object>) pullRequest.get("merge_commit");
 
+            String isPrMerged = (String) pullRequest.get("state");
+            if (!isPrMerged.equals("MERGED")) {
+                throw new NoPrException();
+            }
+
             String branchName =  ((Map<String, Object>) destination.get("branch")).get("name").toString();
             String commitSha = (String) mergeCommit.get("hash");
             String repoName = (String) ((Map<String, Object>) payload.get("repository")).get("full_name");

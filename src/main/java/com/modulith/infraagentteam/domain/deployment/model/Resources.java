@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.Objects;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -12,4 +14,12 @@ import lombok.NoArgsConstructor;
 public class Resources {
     private String cpu;
     private String memory;
+
+    public String getCpu() {
+        return Objects.requireNonNullElse(cpu, "1024");
+    }
+
+    public String getMemory() {
+        return Objects.requireNonNullElse(memory, "2048");
+    }
 }

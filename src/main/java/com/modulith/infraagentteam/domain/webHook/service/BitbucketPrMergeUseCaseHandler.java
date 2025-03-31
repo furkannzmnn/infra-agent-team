@@ -21,10 +21,7 @@ public class BitbucketPrMergeUseCaseHandler {
     public void handle(BitbucketPrMergeUseCase payload) {
         log.info("Handling Bitbucket PR merge webhook: {}", payload);
 
-        if (redisCommitHandler.isCommitProcessed(payload.commitId())) {
-            log.info("Commit already processed: {}", payload.commitId());
-            return;
-        }
+        redisCommitHandler.markCommitAsProcessed(payload.commitId());
 
         DeploymentConfig config = deploymentYamlPort.retrieve(FileRetrieveRequest.builder()
                 .commit(payload.commitId())
@@ -36,7 +33,5 @@ public class BitbucketPrMergeUseCaseHandler {
         log.info("Deployment config retrieved: {}", config);
 
         deploymentYamlPort.start(config);
-
-        redisCommitHandler.markCommitAsProcessed(payload.commitId());
     }
 }
