@@ -98,6 +98,14 @@ public class AwsEcsCloudformationBuilder implements DeploymentHandler {
         taskDef.append("          PortMappings:\n");
         taskDef.append("            - ContainerPort: ").append(service.getPort()).append("\n");
         taskDef.append("              Protocol: tcp\n");
+        taskDef.append("          HealthCheck:\n");
+        taskDef.append("            Command:\n");
+        taskDef.append("              - CMD-SHELL\n");
+        taskDef.append("              - curl -f http://localhost:").append(service.getPort()).append("/ || exit 1\n");
+        taskDef.append("            Interval: 30\n");
+        taskDef.append("            Timeout: 5\n");
+        taskDef.append("            Retries: 3\n");
+        taskDef.append("            StartPeriod: 60\n");
 
         if (service.getEnvVars() != null && !service.getEnvVars().isEmpty()) {
             taskDef.append("          Environment:\n");
@@ -122,10 +130,10 @@ public class AwsEcsCloudformationBuilder implements DeploymentHandler {
         targetGroup.append("      TargetType: ip\n");
         targetGroup.append("      VpcId: ").append("{{VPC}}").append("\n");
         targetGroup.append("      HealthCheckPath: /\n");
-        targetGroup.append("      HealthCheckIntervalSeconds: 30\n");
+        targetGroup.append("      HealthCheckIntervalSeconds: 10\n");
         targetGroup.append("      HealthCheckTimeoutSeconds: 5\n");
         targetGroup.append("      HealthyThresholdCount: 2\n");
-        targetGroup.append("      UnhealthyThresholdCount: 2\n");
+        targetGroup.append("      UnhealthyThresholdCount: 5\n");
         targetGroup.append("\n");
         return targetGroup.toString();
     }
