@@ -1,10 +1,11 @@
-package com.modulith.infraagentteam.infra.adapters.deployment.bitbucket;
+package com.modulith.infraagentteam.infra.adapters.deployment.github;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.modulith.infraagentteam.domain.deployment.model.DeploymentConfig;
 import com.modulith.infraagentteam.domain.shared.model.query.FileRetrieveRequest;
 import com.modulith.infraagentteam.domain.shared.model.query.GitType;
-import com.modulith.infraagentteam.infra.adapters.deployment.github.GitClient;
+import com.modulith.infraagentteam.infra.adapters.deployment.bitbucket.BasicAuthInterceptor;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
@@ -13,19 +14,13 @@ import org.springframework.web.client.RestTemplate;
 import static com.modulith.infraagentteam.infra.shared.YamlParser.parseYaml;
 
 @Component
-public class BitbucketClient implements GitClient {
+public class GithubClient implements GitClient {
 
     private final RestTemplate restTemplate;
 
-
-    public BitbucketClient(RestTemplate restTemplate, BasicAuthInterceptor basicAuthInterceptor) {
+    public GithubClient(RestTemplate restTemplate, BasicAuthInterceptor basicAuthInterceptor) {
         this.restTemplate = restTemplate;
         restTemplate.getInterceptors().add(basicAuthInterceptor);
-    }
-
-    @Override
-    public boolean isSupportedClient(GitType type) {
-        return GitType.BITBUCKET.equals(type);
     }
 
     public DeploymentConfig callFile(FileRetrieveRequest retrieveRequest) {
@@ -51,4 +46,8 @@ public class BitbucketClient implements GitClient {
 
     }
 
+    @Override
+    public boolean isSupportedClient(GitType type) {
+        return GitType.GITHUB.equals(type);
+    }
 }

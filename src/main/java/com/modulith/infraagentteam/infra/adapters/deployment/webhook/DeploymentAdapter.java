@@ -2,28 +2,33 @@ package com.modulith.infraagentteam.infra.adapters.deployment.webhook;
 
 import com.modulith.infraagentteam.domain.deployment.model.DeploymentConfig;
 import com.modulith.infraagentteam.domain.deployment.port.DeploymentPort;
-import com.modulith.infraagentteam.domain.shared.model.query.BitbucketFileRetrieveRequest;
+import com.modulith.infraagentteam.domain.shared.model.query.FileRetrieveRequest;
 import com.modulith.infraagentteam.infra.adapters.deployment.DeploymentProcessor;
-import com.modulith.infraagentteam.infra.adapters.deployment.bitbucket.BitbucketClient;
-import lombok.RequiredArgsConstructor;
+import com.modulith.infraagentteam.infra.adapters.deployment.github.GitClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 @Component
 @Slf4j
 public class DeploymentAdapter implements DeploymentPort {
 
-    private final BitbucketClient bitbucketClient;
+    private final List<GitClient> gitClientList;
     private final DeploymentProcessor deploymentProcessor;
 
-    public DeploymentAdapter(BitbucketClient bitbucketClient, DeploymentProcessor deploymentProcessor) {
-        this.bitbucketClient = bitbucketClient;
+    public DeploymentAdapter(List<GitClient> gitClientList, DeploymentProcessor deploymentProcessor) {
+        this.gitClientList = gitClientList;
         this.deploymentProcessor = deploymentProcessor;
     }
 
     @Override
-    public DeploymentConfig retrieve(BitbucketFileRetrieveRequest request) {
-        return bitbucketClient.callFile(request);
+    public DeploymentConfig retrieve(FileRetrieveRequest request) {
+        return gitClientList.stream()
+                .filter(client -> client.isSupportedClient(request.gitType()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Unsupported git type: " + request.gitType()))
+                .callFile(request);
     }
 
     @Override
